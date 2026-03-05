@@ -40,7 +40,6 @@ def leer_archivo(archivo, hoja):
     except Exception as e:
         print(f"Ocurrió un error inesperado: {e}")
     return None   
-
 def build_save_path(original_path: str, suffix: str = '_filtrado', out_ext: str = '.xlsx') -> str:
     p = Path(original_path)
     stem = p.stem  # nombre sin extensión
@@ -61,7 +60,6 @@ def match_column_by_keywords(df, keywords):
                 if kw.lower() in c:
                     return cols[i]
         return None
-
 def _make_table(df, startrow, suffix):
     if df.empty:
         return
@@ -72,7 +70,6 @@ def _make_table(df, startrow, suffix):
     tbl = Table(displayName=table_name, ref=ref)
     tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
     ws.add_table(tbl)
-
 #generar tabla 1
 def tabla_1(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_case, col_qty):
     # Preparar resumen
@@ -120,6 +117,84 @@ def tabla_1(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_c
 
     print(f"Hoja '{sheet_name}': {len(tabla_por_serie)} series escritas.")
     return len(tabla_por_serie) + 2  # retorna la siguiente fila disponible
+#tabla 2
+def tabla_2(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_case, col_qty, col_reason, col_detail_reason, startrow=0):
+    # Preparar resumen con las columnas necesarias (sin serie)
+    resumen = df_filtrado.loc[:, [col_reason, col_detail_reason, col_case, col_qty]].copy()
+    resumen.columns = ['reason', 'detail_reason', 'case_number', 'quantity']
+    resumen['quantity'] = pd.to_numeric(resumen['quantity'], errors='coerce').fillna(0)
+
+    # Tabla agrupada por reason, detail_reason (sin serie)
+    tabla_agrupada = (
+        resumen
+        .groupby(['reason', 'detail_reason'], dropna=False, as_index=False)
+        .agg(
+            count_of_case_number=('case_number', 'nunique'),
+            sum_of_quantity=('quantity', 'sum')
+        )
+    )
+
+    # Escribir la tabla
+    tabla_agrupada.to_excel(writer, sheet_name=sheet_name, index=False, startrow=startrow)
+
+    # Dar formato de tabla de Excel
+    wb = writer.book
+    ws = wb[sheet_name]
+
+    def _make_table(df, startrow, suffix):
+        if df.empty:
+            return
+        _table_counter[0] += 1
+        nrows, ncols = df.shape
+        ref = f"A{startrow + 1}:{get_column_letter(ncols)}{startrow + nrows + 1}"
+        table_name = f"Tabla_{_table_counter[0]}_{suffix}"
+        tbl = Table(displayName=table_name, ref=ref)
+        tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+        ws.add_table(tbl)
+
+    _make_table(tabla_agrupada, startrow, "por_reason")
+
+    print(f"Hoja '{sheet_name}': {len(tabla_agrupada)} filas en tabla 2.")
+    return startrow + len(tabla_agrupada) + 2
+
+#genera tabla 3
+def tabla_3(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_case, col_qty, col_reason, col_detail_reason, startrow=0):
+    # Preparar resumen con las columnas necesarias
+    resumen = df_filtrado.loc[:, [col_reason, col_detail_reason, col_case, col_qty]].copy()
+    resumen.columns = ['reason', 'detail_reason', 'case_number', 'quantity']
+    resumen['quantity'] = pd.to_numeric(resumen['quantity'], errors='coerce').fillna(0)
+
+    # Tabla agrupada por serie, reason, detail_reason
+    tabla_agrupada = (
+        resumen
+        .groupby(['reason', 'detail_reason'], dropna=False, as_index=False)
+        .agg(
+            count_of_case_number=('case_number', 'nunique'),
+        )
+    )
+
+    # Escribir la tabla
+    tabla_agrupada.to_excel(writer, sheet_name=sheet_name, index=False, startrow=startrow)
+
+    # Dar formato de tabla de Excel
+    wb = writer.book
+    ws = wb[sheet_name]
+
+    def _make_table(df, startrow, suffix):
+        if df.empty:
+            return
+        _table_counter[0] += 1
+        nrows, ncols = df.shape
+        ref = f"A{startrow + 1}:{get_column_letter(ncols)}{startrow + nrows + 1}"
+        table_name = f"Tabla_{_table_counter[0]}_{suffix}"
+        tbl = Table(displayName=table_name, ref=ref)
+        tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+        ws.add_table(tbl)
+
+    _make_table(tabla_agrupada, startrow, "por_serie_reason")
+
+    print(f"Hoja '{sheet_name}': {len(tabla_agrupada)} filas en tabla 2.")
+    return startrow + len(tabla_agrupada) + 2  # retorna la siguiente fila disponible
 
 ## se genera tabla 4
 def tabla_4(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_customer, col_case, startrow=0):
@@ -152,8 +227,6 @@ def tabla_4(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_customer, co
 
     _make_table(tabla_por_customer, startrow, "por_customer")
     print(f"Hoja '{sheet_name}': {len(tabla_por_customer)} clientes escritos.")
-
-
 def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
     save_path = build_save_path(original_path, suffix='_filtrado', out_ext='.xlsx')
     #Aplica varios filtros y guarda cada resultado en una hoja distinta del mismo archivo Excel.
@@ -192,6 +265,8 @@ def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
                 col_case  = match_column_by_keywords(df_filtrado, ['case', 'case of', 'case number', 'case_of', 'case#'])
                 col_qty   = match_column_by_keywords(df_filtrado, ['quality', 'qty', 'quantity', 'quiality', 'cant', 'count'])
                 col_customer = match_column_by_keywords(df_filtrado, ['customer', 'cliente', 'client', 'cust'])
+                col_reason = match_column_by_keywords(df_filtrado, ['reason (english)', 'razon', 'razón'])
+                col_detail_reason = match_column_by_keywords(df_filtrado, ['detail reason (english)', 'detalle', 'detail'])
 
                 if col_serie is None or col_case is None or col_qty is None:
                     # Si falta alguna columna, avisamos y escribimos el df completo como antes
@@ -199,13 +274,18 @@ def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
                     df_filtrado.to_excel(writer, sheet_name=sheet_name, index=False)
                 else:
                     next_row = tabla_1(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty)
+
+                    if col_reason is not None and col_detail_reason is not None:
+                        next_row = tabla_2(df_filtrado, writer, sheet_name, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
+                    
+                    if col_reason is not None and col_detail_reason is not None:
+                        next_row = tabla_3(df_filtrado, writer, sheet_name, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
                     if col_customer is not None:
                         tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
 
-
 if __name__ == "__main__": 
-    archivo = pedir_archivo() 
-    hoja = pedir_hoja(archivo)
+    archivo = 'Week9.xlsx'
+    hoja = 'IPL - Cases'
     print(f"archivo seleccionado: {archivo}")
     print(f"hoja seleccionada: {hoja}")
     datos = leer_archivo(archivo, hoja) 
