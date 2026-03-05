@@ -1,6 +1,9 @@
 import pandas as pd 
 import os
+from pathlib import Path
 import openpyxl
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 def pedir_archivo():
     while True:
@@ -38,31 +41,100 @@ def leer_archivo(archivo, hoja):
         print(f"Ocurrió un error inesperado: {e}")
     return None   
 
+def build_save_path(original_path: str, suffix: str = '_filtrado', out_ext: str = '.xlsx') -> str:
+    p = Path(original_path)
+    stem = p.stem  # nombre sin extensión
+    parent = p.parent
+    new_name = f"{stem}{suffix}{out_ext}"
+    full = parent / new_name
+    i = 1
+    # Si ya existe, agrega un contador: nombre_filtrado(1).xlsx, etc.
+    while full.exists():
+        full = parent / f"{stem}{suffix}({i}){out_ext}"
+        i += 1
+    return str(full)
+def match_column_by_keywords(df, keywords):
+        cols = list(df.columns)
+        cols_lower = [c.strip().lower() for c in cols]
+        for kw in keywords:
+            for i, c in enumerate(cols_lower):
+                if kw.lower() in c:
+                    return cols[i]
+        return None
+#generar tabla 1
+def escribir_tablas_con_formato(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_case, col_qty):
+    # Preparar resumen
+    resumen = df_filtrado.loc[:, [col_serie, col_case, col_qty]].copy()
+    resumen.columns = ['serie', 'case_of_numer', 'quality']
+    resumen['quality'] = pd.to_numeric(resumen['quality'], errors='coerce').fillna(0)
 
-def sanitize_sheet_name(name: str) -> str:
-    # Excel limita los nombres de hoja a 31 caracteres y no permite algunos caracteres
-    invalid = ['\\', '/', '*', '[', ']', ':', '?']
-    for c in invalid:
-        name = name.replace(c, '')
-    return name[:31]
+    # Tabla detalle por serie + case (solo para calcular, no se escribe)
+    tabla_resumen = (
+        resumen
+        .groupby(['serie', 'case_of_numer'], dropna=False, as_index=False)
+        .agg({'quality': 'sum'})
+        .rename(columns={'quality': 'sum_of_quality'})
+    )
 
-def guardar_filtros_en_hojas(datos: pd.DataFrame, save_path: str = 'nuevoFiltrado.xlsx'):
-    
+    # Tabla agrupada por serie
+    tabla_por_serie = (
+        tabla_resumen
+        .groupby('serie', as_index=False)
+        .agg(
+            cantidad_de_casos=('case_of_numer', 'nunique'),
+            suma_de_las_cantidades=('sum_of_quality', 'sum')
+        )
+    )
+
+    # Escribir solo la tabla por serie
+    tabla_por_serie.to_excel(writer, sheet_name=sheet_name, index=False, startrow=0)
+
+    # Dar formato de tabla de Excel
+    wb = writer.book
+    ws = wb[sheet_name]
+
+    def _make_table(df, startrow, suffix):
+        if df.empty:
+            return
+        nrows, ncols = df.shape
+        ref = f"A{startrow + 1}:{get_column_letter(ncols)}{startrow + nrows + 1}"
+        tbl = Table(displayName=f"Tbl_{sheet_name}_{suffix}".replace(" ", "_"), ref=ref)
+        tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+        ws.add_table(tbl)
+
+    _make_table(tabla_por_serie, 0, "por_serie")
+
+    print(f"Hoja '{sheet_name}': {len(tabla_por_serie)} tabla 1 escrita.")
+
+
+
+
+
+
+
+
+
+############################################################
+############################################################
+
+def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
+    save_path = build_save_path(original_path, suffix='_filtrado', out_ext='.xlsx')
     #Aplica varios filtros y guarda cada resultado en una hoja distinta del mismo archivo Excel.
     
     # Define tus filtros: (nombre_hoja, columna, lista_de_valores)
     filtros = [
-        ('Factory_Ensenada_Sauzal_Olathe', 'Factory', ['Ensenada', 'El Sauzal', 'Olathe']),
+        #('Factory_Ensenada_Sauzal_Olathe', 'Factory', ['Ensenada', 'El Sauzal', 'Olathe']),
         ('Schlage_Residential_Mechanical', 'Brand / Category', ['Schlage Residential Mechanical']),
         ('Schlage_Residential_Electronic', 'Brand / Category', ['Schlage Residential Electronic']),
         ('Schlage_Electronic_Locks', 'Brand / Category', ['Schlage Electronic Locks']),
         ('Falcon_Lock', 'Brand / Category', ['Falcon - Lock']),
         ('Schlage_Commercial', 'Brand / Category', ['Schlage Commercial'])
     ]
+    ###############
 
     with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
         for nombre, col, valores in filtros:
-            sheet_name = sanitize_sheet_name(nombre)
+            sheet_name = nombre
             # Comprueba que columna exista
             if col not in datos.columns:
                 print(f"Advertencia: la columna '{col}' no existe en el DataFrame. Hoja '{sheet_name}' vacía.")
@@ -78,12 +150,17 @@ def guardar_filtros_en_hojas(datos: pd.DataFrame, save_path: str = 'nuevoFiltrad
                 print(f"No se encontraron filas para {nombre}. Se escribirá hoja vacía con mensaje.")
                 pd.DataFrame({'Aviso': [f"No se encontraron filas para filtro: {valores}"]}).to_excel(writer, sheet_name=sheet_name, index=False)
             else:
-                df_filtrado.to_excel(writer, sheet_name=sheet_name, index=False)
-                print(f"Hoja '{sheet_name}' guardada con {len(df_filtrado)} filas.")
+                # Intentar detectar columnas para el resumen: serie, case, cantidad
+                col_serie = match_column_by_keywords(df_filtrado, ['serie', 'serial', 'serial number', 's/n'])
+                col_case  = match_column_by_keywords(df_filtrado, ['case', 'case of', 'case number', 'case_of', 'case#'])
+                col_qty   = match_column_by_keywords(df_filtrado, ['quality', 'qty', 'quantity', 'quiality', 'cant', 'count'])
 
-    print(f"Archivo guardado en: {save_path}")
-#generar tabla 1
-#def generar_tabla1(archivo_limpio):
+                if col_serie is None or col_case is None or col_qty is None:
+                    # Si falta alguna columna, avisamos y escribimos el df completo como antes
+                    print(f"Advertencia: no se detectaron las columnas necesarias para el resumen: serie={col_serie}, case={col_case}, qty={col_qty}")
+                    df_filtrado.to_excel(writer, sheet_name=sheet_name, index=False)
+                else:
+                    escribir_tablas_con_formato(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty)
 
 
 if __name__ == "__main__": 
@@ -96,5 +173,5 @@ if __name__ == "__main__":
     if datos is None:
         print("No se pudo leer el DataFrame. Saliendo.")
     else:
-        guardar_filtros_en_hojas(datos, save_path='nuevoFiltrado.xlsx')
+        guardar_filtros_en_hojas(datos, original_path=archivo)
         
