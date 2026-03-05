@@ -4,7 +4,7 @@ from pathlib import Path
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
-
+_table_counter = [0]  
 def pedir_archivo():
     while True:
         nombre = input("Ingrese el nombre del archivo Excel (con extensión .xlsx o .xls): ").strip()
@@ -61,8 +61,20 @@ def match_column_by_keywords(df, keywords):
                 if kw.lower() in c:
                     return cols[i]
         return None
+
+def _make_table(df, startrow, suffix):
+    if df.empty:
+        return
+    _table_counter[0] += 1
+    nrows, ncols = df.shape
+    ref = f"A{startrow + 1}:{get_column_letter(ncols)}{startrow + nrows + 1}"
+    table_name = f"Tabla_{_table_counter[0]}_{suffix}"
+    tbl = Table(displayName=table_name, ref=ref)
+    tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+    ws.add_table(tbl)
+
 #generar tabla 1
-def escribir_tablas_con_formato(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_case, col_qty):
+def tabla_1(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_case, col_qty):
     # Preparar resumen
     resumen = df_filtrado.loc[:, [col_serie, col_case, col_qty]].copy()
     resumen.columns = ['serie', 'case_of_numer', 'quality']
@@ -96,26 +108,51 @@ def escribir_tablas_con_formato(df_filtrado: pd.DataFrame, writer, sheet_name: s
     def _make_table(df, startrow, suffix):
         if df.empty:
             return
+        _table_counter[0] += 1
         nrows, ncols = df.shape
         ref = f"A{startrow + 1}:{get_column_letter(ncols)}{startrow + nrows + 1}"
-        tbl = Table(displayName=f"Tbl_{sheet_name}_{suffix}".replace(" ", "_"), ref=ref)
+        table_name = f"Tabla_{_table_counter[0]}_{suffix}"
+        tbl = Table(displayName=table_name, ref=ref)
         tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
         ws.add_table(tbl)
 
     _make_table(tabla_por_serie, 0, "por_serie")
 
-    print(f"Hoja '{sheet_name}': {len(tabla_por_serie)} tabla 1 escrita.")
+    print(f"Hoja '{sheet_name}': {len(tabla_por_serie)} series escritas.")
+    return len(tabla_por_serie) + 2  # retorna la siguiente fila disponible
 
+## se genera tabla 4
+def tabla_4(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_customer, col_case, startrow=0):
+    # Preparar resumen solo con customer y case
+    resumen = df_filtrado.loc[:, [col_customer, col_case]].copy()
+    resumen.columns = ['customer', 'case_of_number']
 
+    tabla_por_customer = (
+        resumen
+        .groupby('customer', as_index=False)
+        .agg(total_de_casos=('case_of_number', 'nunique'))
+    )
 
+    # Escribir a partir de startrow (no en 0)
+    tabla_por_customer.to_excel(writer, sheet_name=sheet_name, index=False, startrow=startrow)
 
+    wb = writer.book
+    ws = wb[sheet_name]
 
+    def _make_table(df, startrow, suffix):
+        if df.empty:
+            return
+        _table_counter[0] += 1
+        nrows, ncols = df.shape
+        ref = f"A{startrow + 1}:{get_column_letter(ncols)}{startrow + nrows + 1}"
+        table_name = f"Tabla_{_table_counter[0]}_{suffix}"
+        tbl = Table(displayName=table_name, ref=ref)
+        tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+        ws.add_table(tbl)
 
+    _make_table(tabla_por_customer, startrow, "por_customer")
+    print(f"Hoja '{sheet_name}': {len(tabla_por_customer)} clientes escritos.")
 
-
-
-############################################################
-############################################################
 
 def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
     save_path = build_save_path(original_path, suffix='_filtrado', out_ext='.xlsx')
@@ -138,7 +175,7 @@ def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
             # Comprueba que columna exista
             if col not in datos.columns:
                 print(f"Advertencia: la columna '{col}' no existe en el DataFrame. Hoja '{sheet_name}' vacía.")
-                # opcional: escribir un DataFrame vacío o con aviso
+                # opcional: f un DataFrame vacío o con aviso
                 pd.DataFrame({'Aviso': [f"Columna '{col}' no encontrada"]}).to_excel(writer, sheet_name=sheet_name, index=False)
                 continue
 
@@ -154,13 +191,16 @@ def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
                 col_serie = match_column_by_keywords(df_filtrado, ['serie', 'serial', 'serial number', 's/n'])
                 col_case  = match_column_by_keywords(df_filtrado, ['case', 'case of', 'case number', 'case_of', 'case#'])
                 col_qty   = match_column_by_keywords(df_filtrado, ['quality', 'qty', 'quantity', 'quiality', 'cant', 'count'])
+                col_customer = match_column_by_keywords(df_filtrado, ['customer', 'cliente', 'client', 'cust'])
 
                 if col_serie is None or col_case is None or col_qty is None:
                     # Si falta alguna columna, avisamos y escribimos el df completo como antes
                     print(f"Advertencia: no se detectaron las columnas necesarias para el resumen: serie={col_serie}, case={col_case}, qty={col_qty}")
                     df_filtrado.to_excel(writer, sheet_name=sheet_name, index=False)
                 else:
-                    escribir_tablas_con_formato(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty)
+                    next_row = tabla_1(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty)
+                    if col_customer is not None:
+                        tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
 
 
 if __name__ == "__main__": 
