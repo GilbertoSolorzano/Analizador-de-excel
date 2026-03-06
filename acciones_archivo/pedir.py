@@ -1,10 +1,26 @@
+import subprocess
+
 def pedir_archivo():
-    while True:
-        nombre = input("Ingrese el nombre del archivo Excel (con extensión .xlsx o .xls): ").strip()
-        if not (nombre.lower().endswith(".xlsx") or nombre.lower().endswith(".xls")):
-            print("El archivo debe tener extensión .xlsx o .xls.")
-            continue
-        if not os.path.isfile(nombre):
-            print(f" El archivo '{nombre}' no existe en la carpeta actual")
-            continue
-        return nombre
+    script = '''
+    Add-Type -AssemblyName System.Windows.Forms
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Filter = "Archivos Excel (*.xlsx;*.xls)|*.xlsx;*.xls"
+    $dialog.Title = "Selecciona un archivo Excel"
+    if ($dialog.ShowDialog() -eq 'OK') { $dialog.FileName }
+    '''
+    
+    resultado = subprocess.run(
+        ["powershell", "-Command", script],
+        capture_output=True,
+        text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW
+    )
+    
+    archivo = resultado.stdout.strip()
+    
+    if not archivo:
+        print("No se seleccionó ningún archivo.")
+        return None
+    
+    print(f"Archivo seleccionado: {archivo}")
+    return archivo
