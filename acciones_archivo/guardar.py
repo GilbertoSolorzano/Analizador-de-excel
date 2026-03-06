@@ -57,7 +57,8 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                     df_filtrado.to_excel(writer, sheet_name=sheet_name, index=False)
                 else:
                     next_row = tabla_1(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty)
-
+                    # Guardar el startrow de tabla_2 para tabla_5
+                    tabla2_startrow = next_row
                     if col_reason is not None and col_detail_reason is not None:
                         next_row = tabla_2(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
                     if col_reason is not None and col_detail_reason is not None:
@@ -65,7 +66,7 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                     if col_customer is not None:
                         next_row = tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
                     if col_brand and col_serie and col_detail_reason:
-                        next_row = tabla_5(df_filtrado, writer, sheet_name, col_brand, col_serie, col_detail_reason, col_case, col_qty, startrow=next_row)   
+                        tabla_5(df_filtrado, writer, sheet_name, col_serie, col_reason, col_detail_reason, col_case, col_qty, startrow=tabla2_startrow, startcol=5)
                     ws = writer.book[sheet_name]
                     autofit_columns(ws)
 
