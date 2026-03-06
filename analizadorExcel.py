@@ -70,6 +70,22 @@ def _make_table(df, startrow, suffix):
     tbl = Table(displayName=table_name, ref=ref)
     tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
     ws.add_table(tbl)
+def autofit_columns(ws):
+    for column in ws.columns:
+        max_length = 0
+        column_letter = None
+        for cell in column:
+            if column_letter is None:
+                column_letter = cell.column_letter
+            try:
+                if cell.value:
+                    cell_length = len(str(cell.value))
+                    if cell_length > max_length:
+                        max_length = cell_length
+            except:
+                pass
+        if column_letter:
+            ws.column_dimensions[column_letter].width = max_length + 2
 #generar tabla 1
 def tabla_1(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_case, col_qty):
     # Preparar resumen
@@ -118,16 +134,16 @@ def tabla_1(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_c
     print(f"Hoja '{sheet_name}': {len(tabla_por_serie)} series escritas.")
     return len(tabla_por_serie) + 2  # retorna la siguiente fila disponible
 #tabla 2
-def tabla_2(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_case, col_qty, col_reason, col_detail_reason, startrow=0):
-    # Preparar resumen con las columnas necesarias (sin serie)
-    resumen = df_filtrado.loc[:, [col_reason, col_detail_reason, col_case, col_qty]].copy()
-    resumen.columns = ['reason', 'detail_reason', 'case_number', 'quantity']
+def tabla_2(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_serie, col_case, col_qty, col_reason, col_detail_reason, startrow=0):
+    # Preparar resumen con las columnas necesarias
+    resumen = df_filtrado.loc[:, [col_serie, col_reason, col_detail_reason, col_case, col_qty]].copy()
+    resumen.columns = ['serie', 'reason', 'detail_reason', 'case_number', 'quantity']
     resumen['quantity'] = pd.to_numeric(resumen['quantity'], errors='coerce').fillna(0)
 
-    # Tabla agrupada por reason, detail_reason (sin serie)
+    # Tabla agrupada por serie, reason, detail_reason
     tabla_agrupada = (
         resumen
-        .groupby(['reason', 'detail_reason'], dropna=False, as_index=False)
+        .groupby(['serie', 'reason', 'detail_reason'], dropna=False, as_index=False)
         .agg(
             count_of_case_number=('case_number', 'nunique'),
             sum_of_quantity=('quantity', 'sum')
@@ -152,10 +168,10 @@ def tabla_2(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_case, col_qt
         tbl.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
         ws.add_table(tbl)
 
-    _make_table(tabla_agrupada, startrow, "por_reason")
+    _make_table(tabla_agrupada, startrow, "por_serie_reason")
 
     print(f"Hoja '{sheet_name}': {len(tabla_agrupada)} filas en tabla 2.")
-    return startrow + len(tabla_agrupada) + 2
+    return startrow + len(tabla_agrupada) + 2  # retorna la siguiente fila disponible
 
 #genera tabla 3
 def tabla_3(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_case, col_qty, col_reason, col_detail_reason, startrow=0):
@@ -276,12 +292,16 @@ def guardar_filtros_en_hojas(datos: pd.DataFrame,  original_path: str):
                     next_row = tabla_1(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty)
 
                     if col_reason is not None and col_detail_reason is not None:
-                        next_row = tabla_2(df_filtrado, writer, sheet_name, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
+                        next_row = tabla_2(df_filtrado, writer, sheet_name, col_serie, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
+
                     
                     if col_reason is not None and col_detail_reason is not None:
                         next_row = tabla_3(df_filtrado, writer, sheet_name, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
                     if col_customer is not None:
                         tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
+                        
+                    ws = writer.book[sheet_name]
+                    autofit_columns(ws)
 
 if __name__ == "__main__": 
     archivo = 'Week9.xlsx'
