@@ -5,6 +5,7 @@ from tablas.tabla1 import tabla_1
 from tablas.tabla2 import tabla_2
 from tablas.tabla3 import tabla_3
 from tablas.tabla4 import tabla_4
+from tablas.tabla5 import tabla_5
 from acciones_archivo.buscar_columnas import match_column_by_keywords
 from acciones_archivo.obtener_nombre import build_save_path
 def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
@@ -21,7 +22,7 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
         ('Falcon_Lock', 'Brand / Category', ['Falcon - Lock']),
         ('Schlage_Commercial', 'Brand / Category', ['Schlage Commercial'])
     ]
-    print("detecta filtros")
+
     with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
         for nombre, col, valores in filtros:
             sheet_name = nombre
@@ -47,6 +48,8 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                 col_customer = match_column_by_keywords(df_filtrado, ['customer', 'cliente', 'client', 'cust'])
                 col_reason = match_column_by_keywords(df_filtrado, ['reason (english)', 'razon', 'razón'])
                 col_detail_reason = match_column_by_keywords(df_filtrado, ['detail reason (english)', 'detalle', 'detail'])
+                col_brand = match_column_by_keywords(df_filtrado, ['brand', 'marca', 'brand / category'])
+                #col_detail_reason = match_column_by_keywords(df_filtrado, ['detail reason', 'reason detail', 'defect'])
 
                 if col_serie is None or col_case is None or col_qty is None:
                     # Si falta alguna columna, avisamos y escribimos el df completo como antes
@@ -60,7 +63,16 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                     if col_reason is not None and col_detail_reason is not None:
                         next_row = tabla_3(df_filtrado, writer, sheet_name, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
                     if col_customer is not None:
-                        tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
-                        
+                        next_row = tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
+                    if col_brand and col_serie and col_detail_reason:
+                        next_row = tabla_5(df_filtrado, writer, sheet_name, col_brand, col_serie, col_detail_reason, col_case, col_qty, startrow=next_row)   
                     ws = writer.book[sheet_name]
                     autofit_columns(ws)
+
+
+
+
+
+
+
+
