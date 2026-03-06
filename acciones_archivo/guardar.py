@@ -49,6 +49,7 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                 col_reason = match_column_by_keywords(df_filtrado, ['reason (english)', 'razon', 'razón'])
                 col_detail_reason = match_column_by_keywords(df_filtrado, ['detail reason (english)', 'detalle', 'detail'])
                 col_brand = match_column_by_keywords(df_filtrado, ['brand', 'marca', 'brand / category'])
+                col_description = match_column_by_keywords(df_filtrado, ['description', 'descripcion', 'desc'])
                 #col_detail_reason = match_column_by_keywords(df_filtrado, ['detail reason', 'reason detail', 'defect'])
 
                 if col_serie is None or col_case is None or col_qty is None:
@@ -65,8 +66,8 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                         next_row = tabla_3(df_filtrado, writer, sheet_name, col_case, col_qty, col_reason, col_detail_reason, startrow=next_row)
                     if col_customer is not None:
                         next_row = tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
-                    if col_brand and col_serie and col_detail_reason:
-                        tabla_5(df_filtrado, writer, sheet_name, col_serie, col_reason, col_detail_reason, col_case, col_qty, startrow=tabla2_startrow, startcol=5)
+                    if col_serie and col_reason and col_detail_reason and col_description:
+                        tabla_5(df_filtrado, writer, sheet_name, col_serie, col_reason, col_detail_reason, col_description, col_case, col_qty, startrow=tabla2_startrow, startcol=5)
                     ws = writer.book[sheet_name]
                     autofit_columns(ws)
 
