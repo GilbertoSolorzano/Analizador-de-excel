@@ -67,7 +67,7 @@ def guardar_por_hojas(datos: pd.DataFrame,  original_path: str):
                     if col_customer is not None:
                         next_row = tabla_4(df_filtrado, writer, sheet_name, col_customer, col_case, startrow=next_row)
                     if col_serie and col_reason and col_detail_reason and col_description:
-                        tabla_5(df_filtrado, writer, sheet_name, col_serie, col_reason, col_detail_reason, col_description, col_case, col_qty, startrow=tabla2_startrow, startcol=5)
+                        tabla_5(df_filtrado, writer, sheet_name, col_serie, col_reason, col_detail_reason, col_description, col_case, col_qty, startrow=tabla2_startrow, startcol=5, usar_ia=True)
                     ws = writer.book[sheet_name]
                     autofit_columns(ws)
 

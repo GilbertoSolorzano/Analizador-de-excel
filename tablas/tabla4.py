@@ -19,3 +19,4 @@ def tabla_4(df_filtrado: pd.DataFrame, writer, sheet_name: str, col_customer, co
 
     _make_table(ws, tabla_por_customer, startrow, "por_customer")
     print(f"Hoja '{sheet_name}': {len(tabla_por_customer)} clientes escritos.")
+    return startrow + len(tabla_por_customer) + 2
